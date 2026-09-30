@@ -1,11 +1,17 @@
-# Períodos de vazão tratados como FALTA (medição inconsistente). Ver docs/decisoes.md.
-# Critério: cota mínima mensal na estiagem fora do patamar histórico do posto,
-# sem chuva que explique, e/ou cota abaixo da faixa de validade da curva de descarga.
+# Períodos com medição inconsistente. Ver docs/decisoes.md.
+# acao: remover   -> vazão vira FALTA (padrão)
+#       sinalizar -> vazão é mantida, mas a coluna "suspeito" = True (usado no controle IVR)
+# Critérios: (1) cota mínima mensal na estiagem fora do patamar histórico, sem chuva que explique;
+#            (2) cota abaixo da faixa de validade da curva de descarga;
+#            (3) balanço chuva-vazão anual com |z| > 2,5 (src/qa/consistencia_chuva.py).
 ivr:
-  - {inicio: 2010-01-01, fim: 2010-12-31, motivo: "cota mínima 193-202 cm em jun-ago (normal 110-160) com chuva normal; simultâneo a GAP e FSB"}
-  - {inicio: 2016-01-15, fim: 2016-12-31, motivo: "salto de ~70 cm na cota mínima (182-237) com chuva abaixo da média; coincide com a curva 04 (15/01/2016)"}
+  - {inicio: 2010-01-01, fim: 2010-12-31, acao: remover, motivo: "cota mínima 193-202 cm em jun-ago (normal 110-160) com chuva normal; simultâneo a GAP e FSB; balanço 2010 z=5,1"}
+  - {inicio: 2016-01-15, fim: 2016-12-31, acao: remover, motivo: "salto de ~70 cm na cota mínima com chuva abaixo da média; coincide com a curva 04 (15/01/2016); balanço 2016 z=13,8"}
+  - {inicio: 2013-10-01, fim: 2016-01-14, acao: sinalizar, motivo: "balanço chuva-vazão anos hidro 2014-2016 com razão obs/esp 1,50; 1,50; 2,71 (inclusive na crise hídrica)"}
+  - {inicio: 2017-01-01, fim: 2017-09-30, acao: sinalizar, motivo: "ano hidro 2017 razão obs/esp 2,00; cota em retorno gradual após o salto de 2016"}
+  - {inicio: 2018-10-01, fim: 2019-09-30, acao: sinalizar, motivo: "ano hidro 2019 razão obs/esp 0,79 (z=-3,2)"}
 gap:
-  - {inicio: 2009-12-01, fim: 2011-10-31, motivo: "cota mínima 179-235 cm por 23 meses (normal 97-153), incl. estiagem; queda abrupta de 69 cm out->nov/2011 no início das chuvas"}
+  - {inicio: 2009-12-01, fim: 2013-09-30, acao: remover, motivo: "cota mínima 179-235 cm (normal 97-153) até out/2011 e retorno gradual; balanço anos hidro 2010-2013 razão obs/esp 1,85; 2,17; 1,66; 1,44"}
 fsb:
-  - {inicio: 2010-01-01, fim: 2010-07-31, motivo: "cota mínima 158-209 cm em jun-ago (normal 105-130); simultâneo a IVR e GAP"}
-  - {inicio: 2016-11-01, fim: 2017-01-31, motivo: "cota 63-79 cm, abaixo da faixa da curva (>= 70 cm), em período chuvoso; vazão ~0"}
+  - {inicio: 2010-01-01, fim: 2010-07-31, acao: remover, motivo: "cota mínima 158-209 cm em jun-ago (normal 105-130); simultâneo a IVR e GAP"}
+  - {inicio: 2016-11-01, fim: 2017-01-31, acao: remover, motivo: "cota 63-79 cm, abaixo da faixa da curva (>= 70 cm), em período chuvoso; vazão ~0"}

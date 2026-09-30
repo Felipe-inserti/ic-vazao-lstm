@@ -54,3 +54,23 @@
 - Baselines (validação): persistência NSE 1 dia = 0,81/0,92/0,84 (IVR/GAP/FSB);
   em 7 e 30 dias persistência e climatologia <= 0 nos três postos.
 - Memória (ACF log Q < 0,5) após limpeza: 47/43/50 dias (antes 76/59/50: platôs anômalos inflavam).
+
+## 2026-09-30 — Checagem objetiva (balanço chuva-vazão) e PRÉ-REGISTRO do controle IVR
+- Vizinhos no mesmo rio não servem: estações desativadas antes de 2010
+  (62754000 até 1979; 62777000 até 1961; 62778000 até 2007; 62795000 até 1975; 62755000 sem vazão).
+- Método adotado: balanço anual chuva (Xavier, independente das réguas) x escoamento,
+  log R = a + b log P + c log P_ano_anterior, ajuste robusto; |z| > 2,5 = suspeito. Mais dupla massa mensal.
+- FSB: consistente de 1995 em diante. GAP: anos hidro 2010-2013 anômalos -> removido 12/2009-09/2013.
+- IVR: anômalo em 2010, 2014, 2015, 2016, 2017 e 2019 (razões 1,44; 1,50; 1,50; 2,71; 2,00; 0,79),
+  inclusive na crise hídrica de 2014-2015 (mais escoamento do que a chuva explica).
+- Validação walk-forward ampliada para 2005-2014 (10 dobras) para compensar as remoções.
+
+### PRÉ-REGISTRO (antes de qualquer treinamento de LSTM)
+IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsistente:
+- 2010 e 15/01-31/12/2016 removidos (grosseiros); demais anos suspeitos SINALIZADOS e mantidos
+  no treino e no teste (coluna "suspeito").
+- Hipótese H-IVR: o desempenho do LSTM em IVR será inferior ao de GAP e FSB, e nos dias
+  sinalizados como suspeitos será inferior ao dos dias consistentes do próprio IVR, em todos
+  os horizontes (1, 7 e 30 dias).
+- IVR é reportado SEPARADAMENTE e nunca entra em médias com GAP e FSB.
+- Objetivo: quantificar o custo de treinar e avaliar com dados inconsistentes (lição final do trabalho).

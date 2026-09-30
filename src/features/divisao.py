@@ -1,15 +1,15 @@
 """Divisão temporal dos dados (ver docs/decisoes.md).
 
 - Teste: 2015-01-01 a 2019-12-31 -> trancado até a avaliação final.
-- Validação walk-forward (janela expansiva): 7 dobras, cada uma valida um ano
-  de 2008 a 2014 (anos sem dado válido não contribuem) e treina com TUDO o que vem antes desse ano.
+- Validação walk-forward (janela expansiva): 10 dobras, cada uma valida um ano
+  de 2005 a 2014 (anos sem dado válido não contribuem) e treina com TUDO o que vem antes desse ano.
 A data que conta é a de EMISSÃO da previsão (dia t). Para o alvo não invadir
 o período seguinte, exige-se que t + H também esteja no mesmo período.
 """
 import pandas as pd
 
 INICIO_TESTE, FIM_TESTE = pd.Timestamp("2015-01-01"), pd.Timestamp("2019-12-31")
-ANOS_VALIDACAO = [2008, 2009, 2010, 2011, 2012, 2013, 2014]
+ANOS_VALIDACAO = list(range(2005, 2015))
 
 
 def dobras():

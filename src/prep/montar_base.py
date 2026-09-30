@@ -57,9 +57,13 @@ def limpar_e_segmentar(s: pd.DataFrame, posto: str) -> pd.DataFrame:
     s = s[["data", "vazao"]].copy()
     ruins = pd.to_datetime(DATAS_INVALIDAS.get(posto, []))
     s.loc[s["data"].isin(ruins), "vazao"] = np.nan
+    s["suspeito"] = False
     for per in PERIODOS_INVALIDOS.get(posto, []):
         dentro = s["data"].between(pd.Timestamp(per["inicio"]), pd.Timestamp(per["fim"]))
-        s.loc[dentro, "vazao"] = np.nan
+        if per.get("acao", "remover") == "sinalizar":
+            s.loc[dentro, "suspeito"] = True
+        else:
+            s.loc[dentro, "vazao"] = np.nan
 
     falta = s["vazao"].isna()
     bloco = (falta != falta.shift()).cumsum()
@@ -98,7 +102,7 @@ def main() -> None:
         print(f"raio {raio:.0f} km, {n} pontos da grade")
         print(f"período {df['data'].min().date()} a {df['data'].max().date()}  "
               f"| dias com vazão {validos.sum()}  | interpolados {df['interpolado'].sum()}  "
-              f"| segmentos {df['segmento'].nunique()}")
+              f"| segmentos {df['segmento'].nunique()}  | suspeitos (mantidos) {int(df['suspeito'].sum())}")
         print(f"meteo faltante nos dias com vazão: {df.loc[validos, ['chuva', 'tmax', 'tmin']].isna().sum().to_dict()}")
         print(f"chuva média {df['chuva'].mean():.2f} mm/dia  | Tmax {df['tmax'].mean():.1f}  | Tmin {df['tmin'].mean():.1f} °C")
         print(f"chuva -> vazão: pico de correlação com {k} dia(s) de defasagem (Spearman {r:.2f})")

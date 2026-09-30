@@ -1,4 +1,4 @@
-"""Fase 3: baselines (persistência e climatologia) na validação walk-forward 2008-2014.
+"""Fase 3: baselines (persistência e climatologia) na validação walk-forward 2005-2014.
 
 O teste (2015-2019) NÃO é tocado aqui.
 Amostras: mesmas que o LSTM usará (janela máx. N=90, horizonte máx. H=30),
@@ -67,7 +67,7 @@ def figura(res: pd.DataFrame):
         ax.grid(color="#e6e5e1", linewidth=0.6)
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
-    np.atleast_1d(axs)[0].set_ylabel("NSE (validação 2008–2014)")
+    np.atleast_1d(axs)[0].set_ylabel("NSE (validação 2005–2014)")
     np.atleast_1d(axs)[0].legend(frameon=False)
     fig.tight_layout()
     fig.savefig(FIG / "05_baselines_nse.png", dpi=200)
