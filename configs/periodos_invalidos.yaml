@@ -13,5 +13,7 @@ ivr:
 gap:
   - {inicio: 2009-12-01, fim: 2013-09-30, acao: remover, motivo: "cota mínima 179-235 cm (normal 97-153) até out/2011 e retorno gradual; balanço anos hidro 2010-2013 razão obs/esp 1,85; 2,17; 1,66; 1,44"}
 fsb:
+  - {inicio: 1966-01-01, fim: 1974-09-30, acao: remover, motivo: "balanço chuva-vazão inconsistente (anos hidro 1969 z=-4,1; 1971 z=-7,0); curva de descarga anterior a 1981 ausente do arquivo; grade de chuva esparsa nos anos 1960"}
+  - {inicio: 1983-10-01, fim: 1984-09-30, acao: remover, motivo: "ano hidro 1984 com razão obs/esp 1,63 (z=3,1)"}
   - {inicio: 2010-01-01, fim: 2010-07-31, acao: remover, motivo: "cota mínima 158-209 cm em jun-ago (normal 105-130); simultâneo a IVR e GAP"}
   - {inicio: 2016-11-01, fim: 2017-01-31, acao: remover, motivo: "cota 63-79 cm, abaixo da faixa da curva (>= 70 cm), em período chuvoso; vazão ~0"}

@@ -74,3 +74,14 @@ IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsisten
   os horizontes (1, 7 e 30 dias).
 - IVR é reportado SEPARADAMENTE e nunca entra em médias com GAP e FSB.
 - Objetivo: quantificar o custo de treinar e avaliar com dados inconsistentes (lição final do trabalho).
+
+## 2026-09-30 — FSB antes de 1995 e baselines finais da limpeza
+- GAP 1982-1994: nenhum ano suspeito.
+- FSB: anos hidro 1969 (razão 0,50; z=-4,1), 1971 (0,31; z=-7,0) e 1984 (1,63; z=3,1) suspeitos.
+  Critério: se o par chuva-vazão é inconsistente, o ano não serve para treinar um modelo chuva-vazão,
+  qualquer que seja o lado errado. Removidos: 1966-01 a 1974-09 (inclui década com curva
+  de descarga desconhecida e grade de chuva esparsa) e 1983-10 a 1984-09.
+- Baselines na validação 2005-2014 (NSE, melhor baseline por antecedência):
+  GAP 0,95 / 0,44 / 0,18 ; FSB 0,87 / 0,25 / 0,13 (1 / 7 / 30 dias).
+  Climatologia GAP: R² 0,06 -> 0,27 e PBIAS +35% -> -4,6% após a limpeza.
+  IVR (controle): climatologia sem sinal (R² 0,03), coerente com a hipótese pré-registrada.
