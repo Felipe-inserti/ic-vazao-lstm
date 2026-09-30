@@ -1,0 +1,25 @@
+# Fonte: inventário ANA (HidroInventario), consultado em 2026-09-30
+ivr:
+  codigo: "62752000"
+  nome: UHE IBITINGA INVERNADA RECREIO
+  rio: Jacaré-Pepira
+  municipio: Bocaina
+  lat: -22.0775
+  lon: -48.4842
+  area_km2: 1800
+gap:
+  codigo: "62776800"
+  nome: UHE IBITINGA GAVIÃO PEIXOTO
+  rio: Jacaré-Guaçu
+  municipio: Gavião Peixoto
+  lat: -21.8494
+  lon: -48.4917
+  area_km2: 2430
+fsb:
+  codigo: "62800000"
+  nome: UHE PROMISSÃO FAZENDA SÃO BENEDITO
+  rio: Ribeirão dos Porcos
+  municipio: Ibitinga
+  lat: -21.6997
+  lon: -49.0106
+  area_km2: 2710
