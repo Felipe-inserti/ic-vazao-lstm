@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# dados (ficam só na máquina)
+data/raw/
+data/interim/
+data/processed/
+*.parquet
+*.zip
+*.nc
