@@ -26,6 +26,7 @@ OUT = Path("data/processed")
 
 # datas tratadas como falta (ver docs/decisoes.md)
 DATAS_INVALIDAS = {"fsb": ["2016-11-28", "2016-11-29"]}
+PERIODOS_INVALIDOS = yaml.safe_load(Path("configs/periodos_invalidos.yaml").read_text(encoding="utf-8")) or {}
 
 
 def mascara_circulo(lat, lon, lat0, lon0, raio_km):
@@ -56,6 +57,9 @@ def limpar_e_segmentar(s: pd.DataFrame, posto: str) -> pd.DataFrame:
     s = s[["data", "vazao"]].copy()
     ruins = pd.to_datetime(DATAS_INVALIDAS.get(posto, []))
     s.loc[s["data"].isin(ruins), "vazao"] = np.nan
+    for per in PERIODOS_INVALIDOS.get(posto, []):
+        dentro = s["data"].between(pd.Timestamp(per["inicio"]), pd.Timestamp(per["fim"]))
+        s.loc[dentro, "vazao"] = np.nan
 
     falta = s["vazao"].isna()
     bloco = (falta != falta.shift()).cumsum()

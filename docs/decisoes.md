@@ -40,3 +40,17 @@
 - Correção à tese de Zampieri (Ap. B): IVR não está no rio Tietê, e sim no Jacaré-Pepira.
 - Vazão específica (mediana HidroWeb): IVR 11,6; GAP 12,5; FSB 7,8 L/s·km² (plausíveis).
   Pela "vazão" de Zampieri, IVR daria ~63 L/s·km² -> reforça que a série dele é cota.
+
+## 2026-09-30 — Consistência da medição (períodos inválidos)
+- Baselines revelaram climatologia sem sinal sazonal (IVR/GAP, PBIAS +31-35%) -> investigação.
+- Causa: saltos de patamar na COTA (não na curva), com chuva normal. Em 2010 nos TRÊS postos
+  (mesma rede de monitoramento UHE Ibitinga/Promissão) -> provável intervenção operacional.
+- IVR 2016: salto de ~70 cm coincidente com a curva 04 (15/01/2016).
+- FSB nov/2016-jan/2017: cota abaixo da faixa de validade da curva (< 70 cm) -> vazão ~0.
+- Tratados como falta (configs/periodos_invalidos.yaml): IVR 2010 e 15/01-31/12/2016;
+  GAP 12/2009-10/2011; FSB 01-07/2010 e 11/2016-01/2017.
+- Validação walk-forward ampliada para 2008-2014 (7 dobras).
+- Após limpeza: climatologia GAP PBIAS 35% -> 5%; FSB estável; IVR ainda +25% e R² ~0 -> pendente.
+- Baselines (validação): persistência NSE 1 dia = 0,81/0,92/0,84 (IVR/GAP/FSB);
+  em 7 e 30 dias persistência e climatologia <= 0 nos três postos.
+- Memória (ACF log Q < 0,5) após limpeza: 47/43/50 dias (antes 76/59/50: platôs anômalos inflavam).
