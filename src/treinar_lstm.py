@@ -59,7 +59,7 @@ class DobraPulada(Exception):
 
 
 def preparar_dobra(df: pd.DataFrame, dobra: str):
-    _, fim_treino, ini_val, fim_val = next(d for d in divisao.dobras() if d[0] == dobra)
+    fim_treino, ini_val, fim_val = divisao.resolver(dobra)
 
     t_idx = janelas.indices_validos(df["segmento"], amostras.N_MAX_BASELINE, amostras.H_MAX_BASELINE)
     datas_todas = df["data"].iloc[t_idx].to_numpy()
@@ -84,13 +84,10 @@ def preparar_dobra(df: pd.DataFrame, dobra: str):
     X, Y, datas = amostras.preparar(df, esc, N, t_idx)
 
     # baselines de referência: MESMO treino (tudo antes de fim_treino) e MESMOS dias de
-    # validação que src/rodar_baselines.py usa, pra comparação ser direta.
-    treino_bl = df[df["data"] < fim_treino]
-    clim = baselines.ajustar_climatologia(treino_bl["data"], treino_bl["vazao"])
-    referencia = {
-        "persistencia": baselines.persistencia(q_t_todas[m_val], amostras.H_MAX_BASELINE),
-        "climatologia": baselines.climatologia(clim, datas[m_val], amostras.H_MAX_BASELINE),
-    }
+    # validação que src/rodar_baselines.py usa, pra comparação ser direta. Reaproveita
+    # baselines.referencia_dobra (também usado por src/agregar_validacao.py).
+    referencia = baselines.referencia_dobra(df, dobra)
+    assert referencia is not None  # já garantido pelo check de MIN_VAL_AMOSTRAS acima
     val = (X[m_val], Y[m_val], suspeito_todas[m_val], datas[m_val], q_t_todas[m_val])
     return esc, (X[idx_fit], Y[idx_fit], q_t_todas[idx_fit]), (X[idx_dev], Y[idx_dev], q_t_todas[idx_dev]), \
         val, referencia
@@ -122,7 +119,7 @@ def _desfazer_pred(alvo: str, esc: escala.Escala, sc_delta, pred_escalado, q_t):
     return np.expm1(np.log1p(q_t)[:, None] + delta_pred)
 
 
-def rodar(posto: str, dobra: str, semente: int, epocas: int, alvo: str = "nivel"):
+def rodar(posto: str, dobra: str, semente: int, epocas: int, alvo: str = "delta"):
     tf.keras.utils.set_random_seed(semente)
     df = pd.read_parquet(PROC / f"{posto}.parquet")
     esc, (X_tr, Y_tr, q_tr), (X_dev, Y_dev, q_dev), \
@@ -142,9 +139,9 @@ def rodar(posto: str, dobra: str, semente: int, epocas: int, alvo: str = "nivel"
     for k in LEADS_RESUMO:
         linhas.append({"lead": k, "grupo": "todos", "modelo": "LSTM",
                        **metricas.todas(Y_val[:, k - 1], pred[:, k - 1])})
-        for nome, prev in ref.items():
+        for nome in ["persistencia", "climatologia"]:
             linhas.append({"lead": k, "grupo": "todos", "modelo": nome,
-                           **metricas.todas(Y_val[:, k - 1], prev[:, k - 1])})
+                           **metricas.todas(Y_val[:, k - 1], ref[nome][:, k - 1])})
     if posto == "ivr":
         for k in LEADS_RESUMO:
             for grupo, m in [("suspeito", suspeito_val), ("nao_suspeito", ~suspeito_val)]:
@@ -167,12 +164,15 @@ def rodar(posto: str, dobra: str, semente: int, epocas: int, alvo: str = "nivel"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--posto", required=True, choices=["ivr", "gap", "fsb"])
-    ap.add_argument("--dobra", required=True, help="ex.: val2014 (ver src/features/divisao.py)")
+    ap.add_argument("--dobra", required=True,
+                    help="ex.: val2014 (ver src/features/divisao.py) ou \"teste\" = avaliação "
+                         "final 2015-2019 (roda uma única vez, ver docs/decisoes.md, PRÉ-REGISTRO)")
     ap.add_argument("--semente", type=int, default=42)
     ap.add_argument("--epocas", type=int, default=200)
-    ap.add_argument("--alvo", choices=["nivel", "delta"], default="nivel",
-                    help="nivel = prevê log1p(Q); delta = prevê log1p(Q[t+h])-log1p(Q[t]) "
-                         "(ver docs/decisoes.md, 2026-10-01, PRÉ-REGISTRO)")
+    ap.add_argument("--alvo", choices=["nivel", "delta"], default="delta",
+                    help="delta (padrão, escolhido em 2026-10-01: NSE médio 0,324 contra "
+                         "0,319 do nível) = prevê log1p(Q[t+h])-log1p(Q[t]); nivel = prevê "
+                         "log1p(Q) direto (ver docs/decisoes.md, PRÉ-REGISTRO)")
     args = ap.parse_args()
 
     print("GPU:", tf.config.list_physical_devices("GPU") or "nenhuma (CPU)")

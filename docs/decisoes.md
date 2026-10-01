@@ -155,3 +155,70 @@ IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsisten
   tem uma vantagem (pequena) justamente nessas 3 dobras, que não existe nas outras 7. Isso é
   aceito conscientemente pelo custo de treino (6 treinos completos já é caro) e registrado
   aqui para não ser esquecido na hora de interpretar os resultados finais.
+
+## 2026-10-01 — RESULTADO do pré-registro: alvo "delta" escolhido
+- Saída completa em `results/selecao_alvo.txt`. Média de NSE da LSTM nos leads 1/7/30 das 3
+  dobras (critério fixado acima): delta 0,324 contra nível 0,319. **Margem pequena, declarada**
+  — a diferença é de 0,005 (menos de 2% relativo), não uma vitória folgada. Olhando lead a
+  lead, delta venceu ou empatou com nível nos 3 pares dobra/lead onde havia diferença visível
+  (ex.: GAP val2005 lead 1: nível 0,917 -> delta 0,975; GAP val2014 lead 1: 0,776 -> 0,900),
+  então a direção do efeito é consistente mesmo com a margem média pequena.
+- Decisão: `--alvo` passa a ter padrão `delta` em `src/treinar_lstm.py`. A validação completa
+  (10 dobras x 3 sementes, 63 treinos, log em `results/validacao_completa.txt`) já rodou com
+  `delta` antes mesmo desta entrada ser escrita — consistente com a decisão, sem retreinar.
+- Conforme pré-registrado: nenhuma nova variante de alvo será testada depois desta decisão.
+
+## 2026-10-01 — PRÉ-REGISTRO: teste final (2015-2019), antes de implementar `--dobra teste`
+- O teste final roda UMA ÚNICA VEZ, com tudo o que foi decidido na validação já fixado:
+  arquitetura (uma camada LSTM(64) + Dense(30), `src/models/lstm.py`), janela N=60, alvo
+  "delta" (escolhido acima), scaler log1p+MinMax ajustado só no treino, dev = últimas 365
+  amostras válidas antes do início do teste, parada antecipada (paciência 20) decidindo o
+  número de épocas — nenhum desses valores é reajustado depois de ver o resultado no teste.
+  Sementes 42/43/44, mesmas métricas (NSE/KGE/PBIAS/RMSE/R²), mesmas referências
+  (persistência/climatologia) e mesma quebra suspeito/não-suspeito do IVR da validação.
+- Treino = tudo antes de 2015-01-01 (igual ao treino de qualquer dobra, só que até o fim da
+  série de validação); avaliação = 2015-01-01 a 2019-12-31 (`divisao.INICIO_TESTE/FIM_TESTE`,
+  já definidos desde a Parte 1). Implementado como `--dobra teste` em `src/treinar_lstm.py`.
+- Isso fecha o ciclo de decisões pré-registradas do trabalho: IVR como controle (Parte 1),
+  alvo delta (acima) e agora o próprio teste. Depois de rodar o teste, não há mais ajuste de
+  método — só análise e texto de conclusões.
+
+## 2026-10-01 — RESULTADO da validação completa (10 dobras x 3 sementes, alvo delta)
+Saída completa: `results/tabelas/lstm_validacao.csv`, `..._por_dobra.csv`,
+`lstm_skill_score.csv`; figuras `08_lstm_validacao_nse.png` e `09_lstm_skill_score.png`.
+
+- **Resumo (NSE, leads 1/7/30):**
+
+  | posto | LSTM | persistência | climatologia |
+  |---|---|---|---|
+  | GAP | 0,963 / 0,567 / 0,199 | 0,952 / 0,439 / -0,324 | 0,222 / 0,219 / 0,175 |
+  | FSB | 0,878 / 0,359 / 0,072 | 0,869 / 0,135 / -0,721 | 0,258 / 0,239 / 0,112 |
+  | IVR | 0,838 / 0,196 / -0,196 | 0,836 / -0,102 / -0,914 | -0,031 / -0,031 / -0,069 |
+
+- **Faixa de leads em que a LSTM supera AS DUAS referências** (skill score > 0 contra a
+  melhor das duas, `habilidade()` em `src/agregar_validacao.py`): GAP 1-30 (as 30, nunca
+  perde); FSB 1-14; IVR 1-22. Atenção: essa faixa depende também de quão fraca é a
+  referência em cada posto (a climatologia do IVR é quase sem sinal, R²~0, então é "fácil"
+  superá-la) — não deve ser lida como "IVR generaliza melhor que FSB", só como "a régua de
+  comparação do IVR é mais baixa". A comparação de desempenho absoluto é pela tabela acima.
+
+- **H-IVR parte 1 (IVR pior que GAP e FSB) — CONFIRMADA na validação.** Pela tabela acima,
+  o NSE da LSTM em IVR é o menor dos três postos nos três leads de resumo (0,838 < 0,878 e
+  0,963 no lead 1; 0,196 < 0,359 e 0,567 no lead 7; -0,196 < 0,072 e 0,199 no lead 30).
+  Coerente com a medição do IVR ser a mais inconsistente dos três (balanço chuva-vazão,
+  Parte 1).
+
+- **H-IVR parte 2 (dias suspeitos piores que não-suspeitos) — INCONCLUSIVA na validação,
+  conforme pré-registrado.** Comparação direta de NSE entre os dois subconjuntos é injusta
+  (variâncias diferentes — subséries distintas, NSE normaliza pela variância de cada uma) e
+  CHEGOU A APONTAR NA DIREÇÃO ERRADA (NSE suspeito 0,915/0,476/0,148 > não-suspeito
+  0,837/0,192/-0,202 nos leads 1/7/30). Corrigindo com skill score DENTRO de cada
+  subconjunto (1 - MSE_LSTM/MSE_persistência do próprio subconjunto) a direção se inverte
+  pra mais perto do esperado: suspeito -0,249/0,116/0,000 contra não-suspeito
+  0,022/0,277/0,378 — a LSTM é relativamente pior nos dias suspeitos nos 3 leads, na direção
+  de H-IVR. MAS: os 280 dias suspeitos da validação vêm de só dois anos consecutivos
+  (2013: 62 dias, out-dez; 2014: 218 dias — praticamente um único bloco/episódio contínuo,
+  não uma amostra de anos diferentes). Não dá pra separar "efeito de ser suspeito" de
+  "o que aconteceu especificamente nesse episódio de 2013-2014". A avaliação definitiva é
+  no teste (2015-2019), onde os períodos sinalizados cobrem três episódios SEPARADOS
+  (2015-jan/2016, 2017, 2018-2019) — ver pré-registro do teste final acima.

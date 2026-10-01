@@ -18,6 +18,16 @@ def dobras():
             for a in ANOS_VALIDACAO]
 
 
+def resolver(dobra: str):
+    """(fim_treino, inicio_avaliacao, fim_avaliacao) de uma dobra de validação (ex.: "val2014")
+    ou do teste final ("teste": treino = tudo antes de 2015, avaliação = 2015-2019, roda uma
+    única vez — ver docs/decisoes.md, 2026-10-01, PRÉ-REGISTRO)."""
+    if dobra == "teste":
+        return INICIO_TESTE, INICIO_TESTE, FIM_TESTE
+    _, fim_treino, ini_val, fim_val = next(d for d in dobras() if d[0] == dobra)
+    return fim_treino, ini_val, fim_val
+
+
 def mascara_periodo(datas_emissao, h: int, inicio, fim):
     """True se a emissão E o último dia do alvo (t+h) caem dentro de [inicio, fim]."""
     t = pd.to_datetime(datas_emissao)
