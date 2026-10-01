@@ -4,10 +4,14 @@ Prever a vazão diária de três rios, de 1 a 30 dias à frente, com uma LSTM. A
 de corrigir os erros metodológicos comuns nesse tipo de trabalho — vazamento de dados, falta
 de uma referência trivial — a LSTM ainda bate modelos simples? Resposta: depende do posto e do
 horizonte, mas sim, até um ponto que está na tabela abaixo. Projeto de pesquisa independente de
-Felipe Inserti, estendendo o trabalho de Zampieri (2025) para múltiplos horizontes e com
-avaliação metodologicamente mais rigorosa.
+Felipe Inserti, em duas partes: reprodução crítica de Zampieri (2025), medindo o efeito
+isolado de vazamento de dados; e um pipeline próprio de LSTM multi-horizonte, com avaliação
+metodologicamente mais rigorosa.
 
-## Resultado principal
+Texto completo com métodos, resultados e discussão:
+[docs/conclusoes.md](docs/conclusoes.md).
+
+## Parte 2 — Resultado principal: LSTM multi-horizonte
 
 Teste final (2015-2019, trancado até a avaliação, rodado uma única vez), 3 sementes, NSE:
 
@@ -83,8 +87,9 @@ da curva de descarga) viram falta — critério e datas em
 
 ## Método
 
-- **Divisão**: validação walk-forward 2005-2014 (10 dobras, janela expansiva); teste
-  2015-2019, trancado até a avaliação final e rodado uma única vez.
+- **Divisão**: validação walk-forward 2005-2014 (10 dobras anuais, janela expansiva; as que
+  caem em períodos de medição removidos são puladas — 6 a 8 por posto); teste 2015-2019,
+  trancado até a avaliação final e rodado uma única vez.
 - **Modelo**: uma camada LSTM(64) + Dense(30) — prevê os 30 dias de uma vez, não um modelo por
   horizonte. Janela de entrada de 60 dias.
 - **Alvo**: variação do log da vazão em relação ao dia da previsão —
