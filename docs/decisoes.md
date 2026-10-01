@@ -118,3 +118,40 @@ IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsisten
   ajustado só no treino da dobra, excluindo esse último ano.
 - IVR: dias com `suspeito = True` continuam no treino e na avaliação (pré-registro já feito
   acima); a avaliação reporta separadamente suspeito vs. não suspeito.
+
+## 2026-10-01 — Correção do conjunto de parada antecipada e dobras puladas
+- O conjunto de parada antecipada (dev) era "o último ano calendário do treino da dobra";
+  colide com os períodos removidos em `configs/periodos_invalidos.yaml` quando esse ano cai
+  dentro (ou logo depois) de uma lacuna. Medido: GAP val2014 ficava com só 3 amostras de dev
+  (2013 está quase todo dentro do período 12/2009-09/2013 removido do GAP) e GAP val2010
+  tinha 0 amostras de validação. Corrigido: dev = as últimas 365 amostras VÁLIDAS do treino
+  da dobra, em ordem cronológica — pode atravessar uma lacuna, porque cada amostra já respeita
+  o segmento via `indices_validos`. O scaler continua ajustado só com os dias anteriores à
+  primeira amostra de dev (`src/treinar_lstm.py`, `N_DEV = 365`).
+- Dobras com menos de 60 amostras de validação são puladas (não treinam): o balanço
+  chuva-vazão já havia removido blocos inteiros de alguns anos de validação. Medido nas 10
+  dobras x 3 postos: IVR pula val2008 e val2010 (0 amostras); GAP pula val2010-val2013 (0
+  amostras cada, período 12/2009-09/2013 removido cobre os quatro anos hidrológicos); FSB
+  pula val2008, val2010 e val2011 (0 amostras). `MIN_VAL_AMOSTRAS = 60` em
+  `src/treinar_lstm.py`; a dobra pulada é registrada no console (`DobraPulada`), não treina.
+
+## 2026-10-01 — PRÉ-REGISTRO: escolha entre alvo "nível" e "delta" (antes da validação completa)
+- Motivo: no treino completo de GAP val2014 (semente 42, 24 épocas, parada na melhor época 4),
+  a LSTM perdeu da persistência nos três leads de resumo mesmo recebendo a própria vazão
+  Q[t] como entrada (NSE lead 1/7/30: LSTM 0,78/0,02/-0,76 contra persistência 0,88/0,17/-0,42).
+  Hipótese: prever o NÍVEL absoluto da vazão é mais difícil pra rede do que prever a VARIAÇÃO
+  em relação a Q[t], que é literalmente o que a persistência já faz implicitamente (delta=0).
+- Variante testada: alvo "delta" — para cada lead h, o alvo vira
+  log1p(Q[t+h]) - log1p(Q[t]), escalado (MinMax) só com o treino; a previsão final é
+  log1p(Q[t]) + delta previsto, desfeita (expm1) para m³/s. Entradas do modelo não mudam.
+  Alvo "nível" é o comportamento atual (`src/treinar_lstm.py`, `--alvo nivel`, padrão).
+- Comparação, ANTES de rodar: GAP val2005, GAP val2014 e FSB val2014, semente 42 (3 dobras x
+  2 alvos = 6 treinos, `src/selecionar_alvo.py`).
+- Critério, fixado agora: maior média de NSE da LSTM nos leads 1, 7 e 30 dessas 3 dobras
+  (9 valores por alvo). A variante vencedora é usada em TODA a validação completa (10 dobras x
+  3 sementes) e no teste final; não se testam novas variantes de alvo depois desta decisão.
+- Leve otimismo declarado: GAP val2005, GAP val2014 e FSB val2014 também fazem parte da
+  validação completa de 10 dobras — usá-las pra escolher o alvo significa que o alvo escolhido
+  tem uma vantagem (pequena) justamente nessas 3 dobras, que não existe nas outras 7. Isso é
+  aceito conscientemente pelo custo de treino (6 treinos completos já é caro) e registrado
+  aqui para não ser esquecido na hora de interpretar os resultados finais.

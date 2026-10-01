@@ -61,3 +61,17 @@ def desfazer_vazao(esc: Escala, z) -> np.ndarray:
 
 def transformar_meteo(esc: Escala, valores) -> np.ndarray:
     return esc.meteo.transformar(valores)
+
+
+def ajustar_serie(valores) -> _MinMax:
+    """MinMax genérico, SEM log1p: usado pelo alvo "delta" (log1p(Q[t+h]) - log1p(Q[t]), que já
+    pode ser negativo — diferente de `ajustar`, que é só pra vazão em nível, sempre >= 0)."""
+    return _ajustar(valores)
+
+
+def transformar_serie(sc: _MinMax, valores) -> np.ndarray:
+    return sc.transformar(valores)
+
+
+def desfazer_serie(sc: _MinMax, valores) -> np.ndarray:
+    return sc.inverso(valores)
