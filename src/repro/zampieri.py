@@ -126,14 +126,17 @@ def rodar(df, versao, semente, epocas):
     obs = desfazer(sc, y_te)
     prev = desfazer(sc, m(X_te, training=False).numpy().ravel())
     ontem = df[ALVO].to_numpy()[i_te - 1]                           # persistência nos mesmos dias
+    prev_df = pd.DataFrame({"data": df["data"].iloc[i_te].to_numpy(), "obs": obs,
+                            "lstm": prev, "persistencia": ontem})
     return (metricas.todas(obs, prev), metricas.todas(obs, ontem), len(y_te),
             len(X_tr) // 3, df["data"].iloc[i_te].min().date(), df["data"].iloc[i_te].max().date(),
-            epocas_usadas)
+            epocas_usadas, prev_df)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rapido", action="store_true")
+    ap.add_argument("--versoes", default=None, help="ex.: AC (padrão: todas)")
     args = ap.parse_args()
     epocas, sementes = (2, [42]) if args.rapido else (200, [42, 43, 44])
     print("GPU:", tf.config.list_physical_devices("GPU") or "nenhuma (CPU)")
@@ -141,10 +144,13 @@ def main():
     linhas = []
     for p in POSTOS:
         df = pd.read_parquet(DADOS / f"{p}.parquet").sort_values("data").reset_index(drop=True)
-        for versao in VERSOES:
+        for versao in (list(args.versoes) if args.versoes else VERSOES):
             for s in sementes:
                 t0 = time.time()
-                m_lstm, m_pers, n_te, n_tr, ini, fim, ep = rodar(df, versao, s, epocas)
+                m_lstm, m_pers, n_te, n_tr, ini, fim, ep, prev_df = rodar(df, versao, s, epocas)
+                prev_dir = TAB.parent / "previsoes"
+                prev_dir.mkdir(parents=True, exist_ok=True)
+                prev_df.to_csv(prev_dir / f"repro_{versao}_{p}_s{s}.csv", index=False)
                 comum = {"posto": p.upper(), "versao": versao, "semente": s, "n_treino": n_tr,
                          "n_teste": n_te, "teste_de": ini, "teste_ate": fim, "epocas": ep}
                 linhas.append({**comum, "modelo": "LSTM", **m_lstm})
@@ -154,7 +160,7 @@ def main():
 
     res = pd.DataFrame(linhas)
     TAB.mkdir(parents=True, exist_ok=True)
-    sufixo = "_rapido" if args.rapido else ""
+    sufixo = ("_rapido" if args.rapido else "") + (f"_{args.versoes}" if args.versoes else "")
     res.to_csv(TAB / f"repro_zampieri{sufixo}.csv", index=False)
 
     resumo = (res.groupby(["posto", "versao", "modelo"])[["NSE", "KGE", "PBIAS", "RMSE", "R2"]]
