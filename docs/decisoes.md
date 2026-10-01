@@ -90,3 +90,31 @@ IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsisten
 - Escopo final: sem comparação com o SMAP, sem ajuste extenso de hiperparâmetros, sem outras arquiteturas.
   Métricas: NSE, RMSE, PBIAS, R² e KGE. Entrega final: código reproduzível + texto de conclusões.
 - IVR mar/2009 (mínimo 4,5 m³/s em período chuvoso) conferido: recessão contínua e recuperação, mantido.
+
+## 2026-10-01 — Decisões do pipeline da LSTM multi-horizonte (antes do código)
+- Vazão em log1p antes de escalar (MinMaxScaler ajustado só no treino da dobra, nunca no
+  conjunto inteiro): a série é assimétrica e a memória da bacia já é medida em log Q (ver
+  "Checagem chuva-vazão" acima). Métricas sempre desfeitas de volta para m³/s antes de
+  NSE/KGE/PBIAS/RMSE/R² (`src/features/escala.py`).
+- Um único modelo seq2vec por posto, saída Dense(30), substituindo "um modelo por horizonte":
+  mesma entrada para os 30 leads, muito menos treinos, e uma curva de 1 a 30 dias diretamente
+  comparável à dos baselines (`results/tabelas/baselines_validacao.csv`). Reporta-se com destaque
+  os leads 1, 7 e 30. Arquitetura fixada a priori, sem busca de hiperparâmetros: uma camada
+  LSTM(64) + Dense(30) (`src/models/lstm.py`).
+- Janela de entrada N = 60 dias, fixada a priori (não é hiperparâmetro a ajustar): cobre a
+  memória medida por ACF em log Q (43-50 dias após a limpeza). Os índices válidos de emissão
+  continuam vindo de `janelas.indices_validos(segmento, 90, 30)` — os MESMOS dias avaliados
+  pelos baselines; o modelo só usa os últimos 60 dias dessa janela de 90.
+- Sementes: durante o desenvolvimento, 1 semente e só a dobra mais recente (val2014). A
+  validação completa (10 dobras x sementes 42/43/44) roda uma vez só, depois do código fechado,
+  com o tempo total estimado a partir do tempo de uma dobra.
+- Sem vazamento meteorológico: as entradas (chuva, tmax, tmin) usam só os dias até a emissão t;
+  nada de clima de t+1 em diante, porque no uso real esse dado não existiria. Garantido por
+  `tests/test_amostras.py`.
+- Sazonalidade: seno e cosseno do dia do ano entram como entrada (custo baixo, ajuda nos leads
+  longos, onde a sazonalidade domina mais que a memória de curto prazo).
+- Parada antecipada: usa o último ano do treino de cada dobra como conjunto de validação do
+  treino (early stopping), em ordem cronológica, sem embaralhar entre segmentos. O scaler é
+  ajustado só no treino da dobra, excluindo esse último ano.
+- IVR: dias com `suspeito = True` continuam no treino e na avaliação (pré-registro já feito
+  acima); a avaliação reporta separadamente suspeito vs. não suspeito.
