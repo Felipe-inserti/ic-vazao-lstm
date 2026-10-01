@@ -222,3 +222,144 @@ Saída completa: `results/tabelas/lstm_validacao.csv`, `..._por_dobra.csv`,
   "o que aconteceu especificamente nesse episódio de 2013-2014". A avaliação definitiva é
   no teste (2015-2019), onde os períodos sinalizados cobrem três episódios SEPARADOS
   (2015-jan/2016, 2017, 2018-2019) — ver pré-registro do teste final acima.
+
+## 2026-10-01 — H-IVR reavaliada: as duas partes, pelas duas métricas (NSE e skill score)
+Esta entrada substitui a classificação "inconclusiva" dada acima para a Parte 2 por uma
+avaliação mais rigorosa: as duas partes de H-IVR, cada uma pela métrica em que foi
+pré-registrada (NSE) E pelo skill score vs. persistência (1 - MSE_LSTM/MSE_persistência,
+dentro de cada posto / de cada subconjunto — corrige a comparação entre séries de variância
+diferente, mas NÃO substitui a métrica pré-registrada; reportam-se as duas, sem escolher uma
+a posteriori). Números de `src/agregar_validacao.py` (rodado de novo, sem mudar nenhum
+resultado anterior).
+
+**Parte 1 — "o desempenho do LSTM em IVR será inferior ao de GAP e FSB, em todos os
+horizontes (1, 7, 30 dias)":**
+
+| lead | NSE IVR | NSE GAP | NSE FSB | skill IVR | skill GAP | skill FSB |
+|---|---|---|---|---|---|---|
+| 1  | 0,838 | 0,963 | 0,878 | 0,014 | 0,231 | 0,066 |
+| 7  | 0,196 | 0,567 | 0,359 | 0,270 | 0,229 | 0,261 |
+| 30 | -0,196 | 0,199 | 0,072 | 0,375 | 0,395 | 0,461 |
+
+- **Por NSE (métrica em que a hipótese foi escrita): CONFIRMADA.** IVR é o pior dos três
+  postos nos três leads, sem exceção.
+- **Por skill score: NÃO confirmada integralmente.** Nos leads 1 e 30 o IVR também é o pior
+  (skill mais baixo). Mas no lead 7 o IVR (0,270) **supera** o GAP (0,229) e fica
+  tecnicamente empatado com o FSB (0,261) — 2 de 3 leads na direção prevista, 1 na direção
+  contrária.
+- **O resultado depende da métrica.** Por NSE, confirmada nos três leads; por skill score,
+  só em dois.
+
+**Parte 2 — "nos dias sinalizados como suspeitos [o desempenho] será inferior ao dos dias
+consistentes do próprio IVR, em todos os horizontes":**
+
+| lead | NSE suspeito | NSE não-susp. | skill suspeito | skill não-susp. |
+|---|---|---|---|---|
+| 1  | 0,915 | 0,837 | -0,249 | 0,022 |
+| 7  | 0,476 | 0,192 | 0,116 | 0,277 |
+| 30 | 0,148 | -0,202 | 0,000 | 0,378 |
+
+- **Por NSE (métrica em que a hipótese foi escrita): REFUTADA.** O NSE do subconjunto
+  suspeito é MAIOR que o do não-suspeito nos três leads — direção oposta à hipótese.
+- **Por skill score: CONFIRMADA.** O skill do subconjunto suspeito é MENOR que o do
+  não-suspeito nos três leads (-0,249<0,022; 0,116<0,277; 0,000<0,378) — direção esperada,
+  sem exceção.
+- **O resultado depende inteiramente da métrica usada**: NSE refuta, skill score confirma,
+  nos mesmos três leads. Explicação provável: NSE normaliza pela variância de cada
+  subconjunto, e os dois têm variâncias bem diferentes (subséries distintas); o skill score
+  usa o MSE absoluto contra a mesma referência (persistência) dentro do subconjunto, o que
+  evita essa distorção.
+
+**Dias por ano em cada subconjunto do IVR, na validação (1 por data, não por lead/semente):**
+- não-suspeito: 2005 (335), 2006 (335), 2007 (335), 2009 (246), 2011 (241), 2012 (206),
+  2013 (273) — 7 anos distintos, 1.971 dias no total.
+- suspeito: 2013 (62, out-dez), 2014 (218) — só 2 anos, um único bloco contínuo de
+  ~15 meses, 280 dias no total.
+- Caveat válido para as DUAS métricas (não é um critério pra escolher entre elas): o
+  subconjunto suspeito vem de um único episódio, não de uma amostra de anos diferentes —
+  qualquer diferença encontrada, em qualquer direção, por qualquer métrica, pode refletir o
+  que aconteceu especificamente nesse episódio de 2013-2014, não "ser suspeito" em geral.
+
+**Classificação final desta rodada, sem reinterpretar a hipótese depois do resultado:**
+Parte 1: CONFIRMADA por NSE; NÃO confirmada integralmente por skill score (diverge no lead 7).
+Parte 2: REFUTADA por NSE; CONFIRMADA por skill score.
+Nenhuma das duas partes tem veredito estável entre as duas métricas — isso fica registrado
+tal como medido, sem favorecer uma leitura. A avaliação definitiva, com o confundimento de
+ano reduzido (três episódios suspeitos separados em vez de um só), é o teste 2015-2019.
+
+## 2026-10-01 — RESULTADO DO TESTE FINAL (2015-2019) e VEREDITO DEFINITIVO de H-IVR
+Treino único, sem ajuste depois de ver o resultado (conforme pré-registrado acima). Saída
+completa: `results/tabelas/lstm_teste.csv`, `lstm_teste_skill_score.csv`; figuras
+`10_lstm_teste_nse.png`, `11_lstm_teste_skill_score.png`. Comando usado:
+`python -m src.agregar_validacao --dobra teste`.
+
+**Resumo (NSE, leads 1/7/30):**
+
+| posto | LSTM | persistência | climatologia |
+|---|---|---|---|
+| GAP | 0,968 / 0,526 / 0,281 | 0,950 / 0,303 / -0,366 | 0,265 / 0,267 / 0,293 |
+| FSB | 0,937 / 0,264 / 0,138 | 0,914 / -0,093 / -0,778 | 0,140 / 0,143 / 0,164 |
+| IVR | 0,934 / 0,601 / 0,412 | 0,966 / 0,593 / 0,342 | -0,459 / -0,420 / -0,039 |
+
+**Faixa de leads em que a LSTM supera as DUAS referências:** GAP 1-22 e 24 (23/30); FSB 1-13
+(13/30); IVR 6-30 (25/30) — maior faixa das três, mas pelo mesmo motivo já registrado na
+validação (a climatologia do IVR é fraca; não ler como "IVR generaliza melhor").
+
+**Validação x teste, lado a lado (NSE, leads 1/7/30; `--dobra comparar`):** o achado mais
+notável é o IVR — melhora MUITO do validação pro teste em todos os 3 leads e nos 3 modelos
+(ex.: LSTM lead 7: 0,196 -> 0,601, +0,405; lead 30: -0,196 -> 0,412, +0,608; persistência
+lead 30: -0,914 -> 0,342, +1,256). GAP e FSB mudam pouco (a maioria das diferenças fica
+entre -0,14 e +0,12). Isso por si só já é um indício de que o IVR do período de teste é
+qualitativamente diferente do IVR da validação — relevante para interpretar os vereditos
+abaixo.
+
+### PARTE 1 — "desempenho do LSTM em IVR inferior ao de GAP e FSB, em todos os horizontes"
+skill score = 1 - MSE_LSTM/MSE_persistência, leads 1/7/30:
+IVR (-0,909 / 0,022 / 0,107); GAP (0,360 / 0,320 / 0,473); FSB (0,271 / 0,327 / 0,515).
+
+- **Por NSE (métrica pré-registrada): REFUTADA.** IVR só é pior que os dois nos TRÊS postos
+  no lead 1 (e por margem mínima contra FSB: 0,934 vs 0,937). Nos leads 7 e 30 o IVR tem NSE
+  MAIOR que GAP e FSB (lead 7: 0,601 > 0,526 e > 0,264; lead 30: 0,412 > 0,281 e > 0,138) —
+  o oposto do que a hipótese prevê.
+- **Por skill score: CONFIRMADA.** IVR tem skill menor que GAP e FSB nos três leads, sem
+  exceção (-0,909 < 0,360 e 0,271; 0,022 < 0,320 e 0,327; 0,107 < 0,473 e 0,515).
+- **O resultado depende da métrica — e na direção OPOSTA à da validação** (lá o NSE
+  confirmava nos três leads; aqui o NSE refuta em dois deles). O skill score é o único dos
+  dois critérios estável entre validação e teste para a Parte 1 (confirma, ou quase confirma,
+  nos dois).
+
+### PARTE 2 — "dias suspeitos piores que não-suspeitos (dentro do IVR), em todos os horizontes"
+NSE e skill score (vs. persistência do próprio subconjunto), leads 1/7/30:
+
+| lead | NSE suspeito | NSE não-susp. | skill suspeito | skill não-susp. |
+|---|---|---|---|---|
+| 1  | 0,926 | 0,783 | -0,823 | -1,778 |
+| 7  | 0,522 | 0,285 |  0,029 | -0,073 |
+| 30 | 0,370 | -0,347 | 0,116 | -0,052 |
+
+- **Por NSE (métrica pré-registrada): REFUTADA.** Suspeito tem NSE MAIOR que não-suspeito
+  nos três leads — mesma direção observada na validação.
+- **Por skill score: REFUTADA.** Suspeito tem skill MAIOR (melhor) que não-suspeito nos três
+  leads (-0,823>-1,778; 0,029>-0,073; 0,116>-0,052) — ao contrário da validação, onde o
+  skill score tinha CONFIRMADO a hipótese.
+- **As duas métricas concordam no teste: REFUTADA, sem exceção, nos três leads.**
+
+**Dias por ano em cada subconjunto, no teste** (1 por data, não por lead/semente):
+- suspeito: 2015 (331, ano inteiro), 2017 (184, jan-set), 2018 (92, out-dez),
+  2019 (273, jan-set) — total 880, QUATRO anos, TRÊS episódios separados.
+- não-suspeito: 2017 (92, out-dez), 2018 (273, jan-set), 2019 (62, out-dez) — total 427.
+- Ao contrário da validação (um único bloco 2013-2014), aqui o confundimento com "o que
+  aconteceu num ano específico" é bem menor — os dois subconjuntos atravessam os mesmos
+  anos (2017, 2018, 2019), só que em meses diferentes dentro de cada um.
+
+### VEREDITO FINAL DE H-IVR (avaliação definitiva, conforme pré-registrado; sem reinterpretar a hipótese)
+- **Parte 1: resultado depende da métrica, sem veredito único.** CONFIRMADA por skill score,
+  REFUTADA por NSE (a métrica em que a hipótese foi escrita). Achado adicional não previsto:
+  o IVR melhora muito do validação pro teste (tabela acima), o que por si muda o sinal da
+  comparação com GAP/FSB nos leads mais longos.
+- **Parte 2: REFUTADA.** As duas métricas concordam, nos três leads, com uma amostra de dias
+  suspeitos bem menos confundida com um único episódio do que na validação (4 anos, 3
+  episódios). A hipótese de que dias de medição sinalizada como inconsistente pioram o
+  desempenho do LSTM NÃO se sustenta nos dados deste trabalho.
+- Isso fecha a avaliação de H-IVR. Nenhum ajuste de método é feito depois deste resultado
+  (pré-registro de 2026-10-01, "PRÉ-REGISTRO: teste final").

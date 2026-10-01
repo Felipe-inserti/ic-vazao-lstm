@@ -1,32 +1,37 @@
-"""Agrega a validação walk-forward completa (10 dobras x 3 sementes, alvo "delta" — ver
-docs/decisoes.md, 2026-10-01) por posto e lead.
+"""Agrega a validação walk-forward (10 dobras x 3 sementes) OU o teste final (dobra única,
+2015-2019 — ver docs/decisoes.md, 2026-10-01, PRÉ-REGISTRO), alvo "delta", por posto e lead.
 
 Lê results/previsoes/lstm_<posto>_<dobra>_delta_s<semente>.csv (já gerados por
-src/treinar_lstm.py; dobras puladas simplesmente não têm arquivo), junta todas as dobras
+src/treinar_lstm.py; dobras puladas simplesmente não têm arquivo), junta as dobras
 disponíveis de cada posto e calcula NSE/KGE/PBIAS/RMSE/R² por lead (1 a 30), com média e
 desvio entre as 3 sementes. Persistência e climatologia são recalculadas nos MESMOS dias via
 src/models/baselines.referencia_dobra (não depende de TensorFlow, roda em .venv).
 
 IVR é reportado SEPARADAMENTE (nunca entra em médias com GAP/FSB — pré-registro de
 docs/decisoes.md) e ganha uma quebra adicional suspeito vs. não-suspeito (hipótese H-IVR),
-juntando todas as dobras, nos leads 1/7/30 — com persistência/climatologia e skill score
-DENTRO de cada subconjunto (NSE puro não é comparável entre subséries de variância diferente).
+juntando as dobras, nos leads 1/7/30 — com persistência/climatologia e skill score DENTRO de
+cada subconjunto (NSE puro não é comparável entre subséries de variância diferente).
 
 Skill score: 1 - MSE_LSTM / MSE_referência, sempre contra a persistência e também contra a
 MELHOR referência (maior NSE entre persistência e climatologia) quando há as duas.
 
-Uso: python -m src.agregar_validacao
+Uso:
+  python -m src.agregar_validacao                   # validação (padrão)
+  python -m src.agregar_validacao --dobra teste      # teste final (2015-2019)
+  python -m src.agregar_validacao --dobra comparar   # tabela lado a lado (exige os dois acima)
 
-Saídas:
+Saídas (nomes trocam "validacao"/08/09 por "teste"/10/11 conforme --dobra):
   results/tabelas/lstm_validacao.csv            posto, lead, grupo, modelo, NSE, KGE, PBIAS,
                                                  RMSE, R2 (+ _desvio pra LSTM, entre sementes)
-  results/tabelas/lstm_validacao_por_dobra.csv  idem, por posto+dobra (sem juntar as dobras)
+  results/tabelas/lstm_validacao_por_dobra.csv  idem, por posto+dobra (só no modo validação)
   results/tabelas/lstm_skill_score.csv          posto, lead, NSE/RMSE de cada modelo, skill
                                                  score, melhor referência, se a LSTM supera as duas
   results/figuras/08_lstm_validacao_nse.png     NSE x lead, LSTM (média+faixa) x persistência x
                                                  climatologia, 1 painel por posto
   results/figuras/09_lstm_skill_score.png       skill score x lead (vs. melhor referência),
                                                  1 painel por posto, linha zero
+  results/tabelas/lstm_teste.csv, lstm_teste_skill_score.csv,
+  results/figuras/10_lstm_teste_nse.png, 11_lstm_teste_skill_score.png   idem, teste final
 """
 from pathlib import Path
 
@@ -50,9 +55,10 @@ LEADS_RESUMO = [1, 7, 30]
 COR = {"ivr": "#2a78d6", "gap": "#eb6834", "fsb": "#1baf7a"}
 
 
-def dobras_disponiveis(posto: str) -> list[str]:
-    """Dobras com previsão salva pra TODAS as sementes (as que não foram puladas)."""
-    por_semente = [{a.stem.split("_")[2] for a in PREV.glob(f"lstm_{posto}_val*_{ALVO}_s{s}.csv")}
+def dobras_disponiveis(posto: str, padrao: str = "val*") -> list[str]:
+    """Dobras com previsão salva pra TODAS as sementes (as que não foram puladas). `padrao` é
+    o glob do nome da dobra: "val*" pra validação, "teste" pro teste final (dobra única)."""
+    por_semente = [{a.stem.split("_")[2] for a in PREV.glob(f"lstm_{posto}_{padrao}_{ALVO}_s{s}.csv")}
                   for s in SEMENTES]
     comum = set.intersection(*por_semente) if por_semente else set()
     faltando = set.union(*por_semente) - comum if por_semente else set()
@@ -182,7 +188,7 @@ def quebra_ivr_suspeito(df_proc: pd.DataFrame, previsoes: pd.DataFrame, referenc
     cada subconjunto — comparar NSE entre suspeito e não-suspeito direto não é justo (são
     subséries com variâncias diferentes, e o NSE é normalizado pela variância do próprio
     subconjunto); o skill score da LSTM contra a referência DO MESMO subconjunto é que permite
-    comparar. Devolve (tabela de métricas, contagem de dias suspeitos por ano)."""
+    comparar. Devolve (tabela de métricas, contagem de dias por ano em cada subconjunto)."""
     suspeito_por_data = df_proc.set_index("data")["suspeito"]
     p = previsoes.rename(columns={"lstm": "previsto"}).copy()
     p["suspeito"] = p["data"].map(suspeito_por_data)
@@ -209,13 +215,15 @@ def quebra_ivr_suspeito(df_proc: pd.DataFrame, previsoes: pd.DataFrame, referenc
 
     tab = pd.concat(linhas, ignore_index=True)
 
-    # dias suspeitos (um por data, não por lead/semente) por ano de emissão
-    dias_susp = p[p["suspeito"] & (p["lead"] == 1) & (p["semente"] == SEMENTES[0])]
-    contagem_anos = dias_susp["data"].dt.year.value_counts().sort_index()
+    # dias por ano de emissão (um por data, não por lead/semente), nos DOIS subconjuntos
+    dias_unicos = p[(p["lead"] == 1) & (p["semente"] == SEMENTES[0])].copy()
+    dias_unicos["grupo"] = np.where(dias_unicos["suspeito"], "suspeito", "nao_suspeito")
+    dias_unicos["ano"] = dias_unicos["data"].dt.year
+    contagem_anos = dias_unicos.groupby(["grupo", "ano"]).size().rename("dias").reset_index()
     return tab, contagem_anos
 
 
-def figura(tabelas: dict):
+def figura(tabelas: dict, arquivo: str, rotulo_y: str):
     postos = [p for p in POSTOS if p in tabelas]
     fig, axs = plt.subplots(1, len(postos), figsize=(4.2 * len(postos), 3.4), sharey=True)
     estilo = {"persistencia": dict(color="#52514e", linestyle="--", label="persistência"),
@@ -235,14 +243,14 @@ def figura(tabelas: dict):
         ax.grid(color="#e6e5e1", linewidth=0.6)
         for s in ("top", "right"):
             ax.spines[s].set_visible(False)
-    np.atleast_1d(axs)[0].set_ylabel("NSE (validação walk-forward)")
+    np.atleast_1d(axs)[0].set_ylabel(rotulo_y)
     np.atleast_1d(axs)[0].legend(frameon=False, fontsize=8)
     fig.tight_layout()
-    fig.savefig(FIG / "08_lstm_validacao_nse.png", dpi=200)
+    fig.savefig(FIG / arquivo, dpi=200)
     plt.close(fig)
 
 
-def figura_skill(skill_por_posto: dict):
+def figura_skill(skill_por_posto: dict, arquivo: str, titulo: str):
     postos = [p for p in POSTOS if p in skill_por_posto]
     fig, axs = plt.subplots(1, len(postos), figsize=(4.2 * len(postos), 3.0), sharey=True)
     for ax, p in zip(np.atleast_1d(axs), postos):
@@ -255,47 +263,70 @@ def figura_skill(skill_por_posto: dict):
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
     np.atleast_1d(axs)[0].set_ylabel("skill score (1 - MSE/MSE melhor ref.)")
-    fig.suptitle("Habilidade da LSTM sobre a melhor referência (> 0 = LSTM melhor)",
-                 x=0.01, ha="left", fontsize=9)
+    fig.suptitle(titulo, x=0.01, ha="left", fontsize=9)
     fig.tight_layout(rect=[0, 0, 1, 0.92])
-    fig.savefig(FIG / "09_lstm_skill_score.png", dpi=200)
+    fig.savefig(FIG / arquivo, dpi=200)
     plt.close(fig)
 
 
-def main():
+CONFIG_MODO = {
+    "validacao": dict(
+        padrao_dobra="val*", titulo="validação walk-forward (10 dobras)",
+        arquivo_tabela="lstm_validacao.csv", arquivo_por_dobra="lstm_validacao_por_dobra.csv",
+        arquivo_skill="lstm_skill_score.csv",
+        figura_nse="08_lstm_validacao_nse.png", figura_skill="09_lstm_skill_score.png"),
+    "teste": dict(
+        padrao_dobra="teste", titulo="teste final (2015-2019)",
+        arquivo_tabela="lstm_teste.csv", arquivo_por_dobra=None,
+        arquivo_skill="lstm_teste_skill_score.csv",
+        figura_nse="10_lstm_teste_nse.png", figura_skill="11_lstm_teste_skill_score.png"),
+}
+
+
+def agregar(modo: str):
+    """Monta as mesmas saídas (tabela agregada, skill score, figuras) pra "validacao" (10
+    dobras walk-forward) ou "teste" (a dobra única 2015-2019, avaliação final — ver
+    docs/decisoes.md). IVR sempre reportado separado, com a quebra suspeito/não-suspeito."""
+    cfg = CONFIG_MODO[modo]
     TAB.mkdir(parents=True, exist_ok=True)
     FIG.mkdir(parents=True, exist_ok=True)
 
     tabelas_agregadas, tabelas_por_dobra, extras_ivr = {}, [], []
     contagem_anos_ivr = None
     for posto in POSTOS:
-        dobras = dobras_disponiveis(posto)
+        dobras = dobras_disponiveis(posto, cfg["padrao_dobra"])
         if not dobras:
-            print(f"[sem previsões] {posto.upper()}: rode src/treinar_lstm.py primeiro")
+            print(f"[sem previsões] {posto.upper()}: rode src/treinar_lstm.py --dobra "
+                  f"{'<val...>' if modo == 'validacao' else 'teste'} primeiro")
             continue
         df_proc = pd.read_parquet(PROC / f"{posto}.parquet")
         previsoes = carregar_previsoes(posto, dobras)
         referencias = carregar_referencias(df_proc, posto, dobras)
 
         tabelas_agregadas[posto] = tabela_posto(posto, previsoes, referencias, pool_dobras=True)
-        tabelas_por_dobra.append(tabela_posto(posto, previsoes, referencias, pool_dobras=False))
+        if cfg["arquivo_por_dobra"]:
+            tabelas_por_dobra.append(tabela_posto(posto, previsoes, referencias, pool_dobras=False))
 
         if posto == "ivr":
             tab_ivr, contagem_anos_ivr = quebra_ivr_suspeito(df_proc, previsoes, referencias)
             extras_ivr.append(tab_ivr)
 
     agregada = pd.concat(list(tabelas_agregadas.values()) + extras_ivr, ignore_index=True)
-    por_dobra = pd.concat(tabelas_por_dobra, ignore_index=True)
 
     col_redonda_3 = ["NSE", "KGE", "R2", "NSE_desvio", "KGE_desvio", "R2_desvio"]
     col_redonda_1 = ["PBIAS", "RMSE", "PBIAS_desvio", "RMSE_desvio"]
-    for tab in (agregada, por_dobra):
+    tabelas_para_arredondar = [agregada]
+    if tabelas_por_dobra:
+        por_dobra = pd.concat(tabelas_por_dobra, ignore_index=True)
+        tabelas_para_arredondar.append(por_dobra)
+    for tab in tabelas_para_arredondar:
         tab[col_redonda_3] = tab[col_redonda_3].round(3)
         tab[col_redonda_1] = tab[col_redonda_1].round(1)
 
-    agregada.to_csv(TAB / "lstm_validacao.csv", index=False)
-    por_dobra.to_csv(TAB / "lstm_validacao_por_dobra.csv", index=False)
-    figura(tabelas_agregadas)
+    agregada.to_csv(TAB / cfg["arquivo_tabela"], index=False)
+    if tabelas_por_dobra:
+        por_dobra.to_csv(TAB / cfg["arquivo_por_dobra"], index=False)
+    figura(tabelas_agregadas, cfg["figura_nse"], f"NSE ({cfg['titulo']})")
 
     # --- habilidade (skill score) por posto e lead, grupo "todos" ---
     skill_por_posto = {}
@@ -308,10 +339,11 @@ def main():
     col_skill_1 = [c for c in skill_tab.columns if c.startswith("RMSE_")]
     skill_tab[col_skill_3] = skill_tab[col_skill_3].round(3)
     skill_tab[col_skill_1] = skill_tab[col_skill_1].round(1)
-    skill_tab.to_csv(TAB / "lstm_skill_score.csv", index=False)
-    figura_skill(skill_por_posto)
+    skill_tab.to_csv(TAB / cfg["arquivo_skill"], index=False)
+    figura_skill(skill_por_posto, cfg["figura_skill"],
+                 f"Habilidade da LSTM sobre a melhor referência, {cfg['titulo']} (> 0 = LSTM melhor)")
 
-    print("=== resumo (leads 1, 7, 30; grupo=todos) ===")
+    print(f"=== resumo ({cfg['titulo']}; leads 1, 7, 30; grupo=todos) ===")
     resumo = agregada[(agregada["lead"].isin(LEADS_RESUMO)) & (agregada["grupo"] == "todos")]
     with pd.option_context("display.width", 200):
         print(resumo.sort_values(["posto", "lead", "modelo"]).to_string(index=False))
@@ -321,13 +353,23 @@ def main():
         leads_ok = piv.loc[piv["supera_as_duas"], "lead"].tolist()
         print(f"{posto.upper()}: {faixa_leads(leads_ok)}  ({len(leads_ok)}/30 leads)")
 
-    print("\n=== IVR: suspeito x não-suspeito (leads 1, 7, 30), LSTM + referências no mesmo subconjunto ===")
+    print(f"\n=== H-IVR parte 1 ({cfg['titulo']}): NSE pré-registrado x skill score vs. "
+          "persistência, leads 1/7/30 ===")
+    for posto in ["ivr", "gap", "fsb"]:
+        if posto not in skill_por_posto:
+            continue
+        r = skill_por_posto[posto][skill_por_posto[posto]["lead"].isin(LEADS_RESUMO)]
+        print(f"-- {posto.upper()} --")
+        print(r[["lead", "NSE_LSTM", "skill_vs_persistencia"]].round(3).to_string(index=False))
+
+    print(f"\n=== IVR ({cfg['titulo']}): suspeito x não-suspeito (leads 1, 7, 30), LSTM + "
+          "referências no mesmo subconjunto ===")
     ivr_susp = agregada[(agregada["posto"] == "IVR") & (agregada["grupo"] != "todos")]
     with pd.option_context("display.width", 200):
         print(ivr_susp.sort_values(["grupo", "lead", "modelo"]).to_string(index=False))
 
-    print("\nskill da LSTM DENTRO de cada subconjunto (compara com a referência da própria "
-          "subsérie, não a mistura NSE entre variâncias diferentes):")
+    print("\nH-IVR parte 2: skill da LSTM DENTRO de cada subconjunto (compara com a "
+          "referência da própria subsérie, não a mistura NSE entre variâncias diferentes):")
     for grupo in ["suspeito", "nao_suspeito"]:
         sub = ivr_susp[ivr_susp["grupo"] == grupo]
         if sub.empty:
@@ -338,12 +380,53 @@ def main():
         print(f"-- IVR {grupo} --")
         print(piv[cols].round(3).to_string(index=False))
 
-    print("\ndias suspeitos do IVR por ano, na validação (1 por data, não por lead/semente):")
-    print(contagem_anos_ivr.to_string())
+    print(f"\ndias por ano em cada subconjunto do IVR, {cfg['titulo']} "
+          "(1 por data, não por lead/semente):")
+    tab_anos = contagem_anos_ivr.pivot(index="ano", columns="grupo", values="dias").fillna(0).astype(int)
+    print(tab_anos.to_string())
 
-    print(f"\ntabelas em {TAB}/lstm_validacao.csv, {TAB}/lstm_validacao_por_dobra.csv e "
-          f"{TAB}/lstm_skill_score.csv")
-    print(f"figuras em {FIG}/08_lstm_validacao_nse.png e {FIG}/09_lstm_skill_score.png")
+    arquivos = f"{TAB}/{cfg['arquivo_tabela']}"
+    if cfg["arquivo_por_dobra"]:
+        arquivos += f", {TAB}/{cfg['arquivo_por_dobra']}"
+    print(f"\ntabelas em {arquivos} e {TAB}/{cfg['arquivo_skill']}")
+    print(f"figuras em {FIG}/{cfg['figura_nse']} e {FIG}/{cfg['figura_skill']}")
+
+
+def comparar():
+    """Tabela lado a lado validação x teste, leads 1/7/30, grupo "todos" — exige que
+    `agregar("validacao")` e `agregar("teste")` já tenham rodado (lê os CSVs salvos)."""
+    arq_val = TAB / CONFIG_MODO["validacao"]["arquivo_tabela"]
+    arq_tst = TAB / CONFIG_MODO["teste"]["arquivo_tabela"]
+    if not (arq_val.exists() and arq_tst.exists()):
+        print(f"[faltando] rode primeiro: python -m src.agregar_validacao --dobra validacao "
+              f"e --dobra teste (preciso de {arq_val} e {arq_tst})")
+        return
+
+    val = pd.read_csv(arq_val).query("lead in @LEADS_RESUMO and grupo == 'todos'")
+    tst = pd.read_csv(arq_tst).query("lead in @LEADS_RESUMO and grupo == 'todos'")
+    val, tst = val.assign(fase="validacao"), tst.assign(fase="teste")
+    comb = pd.concat([val, tst], ignore_index=True)
+    piv = comb.pivot_table(index=["posto", "lead", "modelo"], columns="fase", values="NSE")
+    piv = piv.reset_index()[["posto", "lead", "modelo", "validacao", "teste"]]
+    piv["diferenca"] = (piv["teste"] - piv["validacao"]).round(3)
+
+    print("=== NSE: validação x teste, leads 1/7/30, grupo=todos ===")
+    with pd.option_context("display.width", 160):
+        print(piv.sort_values(["posto", "lead", "modelo"]).round(3).to_string(index=False))
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dobra", choices=["validacao", "teste", "comparar"], default="validacao",
+                    help="validacao (padrão) = agrega as 10 dobras walk-forward; teste = "
+                         "agrega só a dobra teste (2015-2019); comparar = tabela lado a lado "
+                         "(exige que validacao e teste já tenham rodado)")
+    args = ap.parse_args()
+    if args.dobra == "comparar":
+        comparar()
+    else:
+        agregar(args.dobra)
 
 
 if __name__ == "__main__":
