@@ -12,3 +12,5 @@ data/processed/
 *.zip
 *.nc
 .venv-ml/
+CLAUDE.md
+results/teste_rapido_*.txt

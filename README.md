@@ -1,80 +1,160 @@
-# Previsão multi-horizonte de vazão com LSTM — Bacia Tietê-Jacaré
+# Previsão de vazão com LSTM — Bacia Tietê-Jacaré
 
-Extensão de Zampieri (2025) para horizontes de 1, 7 e 30 dias nos postos IVR, GAP e FSB.
+Prever a vazão diária de três rios, de 1 a 30 dias à frente, com uma LSTM. A pergunta: depois
+de corrigir os erros metodológicos comuns nesse tipo de trabalho — vazamento de dados, falta
+de uma referência trivial — a LSTM ainda bate modelos simples? Resposta: depende do posto e do
+horizonte, mas sim, até um ponto que está na tabela abaixo. Projeto de pesquisa independente de
+Felipe Inserti, estendendo o trabalho de Zampieri (2025) para múltiplos horizontes e com
+avaliação metodologicamente mais rigorosa.
 
-## Ambiente
-- Dados: `.venv` (Python 3.14). Modelos: `.venv-ml` (Python 3.12 + TensorFlow 2.21 com GPU), `requirements-ml.txt`.
-- WSL: o TensorFlow não acha sozinho as bibliotecas NVIDIA instaladas via pip. Correção (acrescentada ao fim de `.venv-ml/bin/activate`):
-  `export LD_LIBRARY_PATH=$(find <site-packages>/nvidia -maxdepth 2 -type d -name lib | paste -sd:):$LD_LIBRARY_PATH`
+## Resultado principal
+
+Teste final (2015-2019, trancado até a avaliação, rodado uma única vez), 3 sementes, NSE:
+
+| posto | lead | NSE LSTM | NSE persistência | NSE climatologia |
+|---|---|---|---|---|
+| FSB | 1 | 0.937 | 0.914 | 0.14 |
+| FSB | 7 | 0.264 | -0.093 | 0.143 |
+| FSB | 30 | 0.138 | -0.778 | 0.164 |
+| GAP | 1 | 0.968 | 0.95 | 0.265 |
+| GAP | 7 | 0.526 | 0.303 | 0.267 |
+| GAP | 30 | 0.281 | -0.366 | 0.293 |
+| IVR | 1 | 0.934 | 0.966 | -0.459 |
+| IVR | 7 | 0.601 | 0.593 | -0.42 |
+| IVR | 30 | 0.412 | 0.342 | -0.039 |
+
+![Skill score por lead, teste final](results/figuras/11_lstm_teste_skill_score.png)
+
+A LSTM supera as duas referências (persistência e climatologia, skill score > 0) até o lead
+13 no FSB, até o 22 no GAP (e também no 24) e quase o horizonte todo no IVR (6-30):
+
+| Posto | Leads em que a LSTM supera as duas referências | Total |
+|---|---|---|
+| IVR | 6-30 | 25/30 |
+| GAP | 1-22, 24 | 23/30 |
+| FSB | 1-13 | 13/30 |
+
+A faixa grande do IVR também reflete uma referência fraca ali (a climatologia do IVR quase
+não tem sinal) — não leia como "o modelo generaliza melhor no IVR". Depois dessas faixas, a
+climatologia (GAP/FSB) ou a persistência (IVR) retomam a dianteira.
+
+Tabelas completas: `results/tabelas/lstm_teste.csv` e `lstm_teste_skill_score.csv`.
 
 ## Parte 1 — Reprodução de Zampieri (2025)
 
-Reproduzimos o modelo "somente dados" de Zampieri (2025) — LSTM(64)×3 + Dense(1), janela de 10
-dias, 17 variáveis meteorológicas do INMET, horizonte de 1 dia — nos três postos (IVR, GAP, FSB),
-usando os dados consolidados de 2022–2024 do próprio autor (`src/repro/zampieri.py`). **Atenção:**
-a coluna "Vazao Observada" desses dados é, muito provavelmente, **cota em cm** (não vazão em
-m³/s) — ver `docs/decisoes.md`; todas as métricas abaixo estão na unidade original da série, não
-em m³/s.
+Zampieri (2025) treinou uma LSTM "só com dados" pra prever cota, nos mesmos três postos.
+Reproduzi o código original (versão A), depois removi o vazamento de dados (versão B) e
+acrescentei a cota passada como entrada (versão C) — mesma arquitetura nas três.
 
-Três versões do mesmo modelo, 3 sementes cada (42, 43, 44):
+NSE médio entre 3 sementes (série em cota, cm — não é vazão):
 
-- **A (fiel ao original):** reproduz exatamente as escolhas do código original —
-  `MinMaxScaler` ajustado no conjunto inteiro antes da divisão, janelas que atravessam dias sem
-  dado, divisão **aleatória** treino/validação/teste (80/10/10) e *data augmentation* com ruído
-  gaussiano (inclusive no alvo). O vazamento aqui é intencional: é o que se quer medir.
-- **B (cronológica):** mesma arquitetura e hiperparâmetros, mas sem vazamento — divisão por
-  **tempo** (80% treino, 10% validação, 10% finais teste), scaler ajustado só no treino, e janelas
-  que não atravessam dias ausentes no calendário.
-- **C (B + cota):** igual a B, acrescentando a cota dos 10 dias anteriores como entrada (o dia
-  previsto nunca entra — sem vazamento).
+| posto | versao | NSE LSTM | NSE persistência |
+|---|---|---|---|
+| FSB | A | 0.876 | 0.931 |
+| FSB | B | -11.535 | 0.781 |
+| FSB | C | -1.328 | 0.781 |
+| GAP | A | 0.848 | 0.852 |
+| GAP | B | -4.616 | -0.448 |
+| GAP | C | -0.935 | -0.448 |
+| IVR | A | 0.863 | 0.932 |
+| IVR | B | -6.393 | 0.648 |
+| IVR | C | 0.368 | 0.648 |
 
-Em todas as versões, a **persistência** (valor de ontem) é calculada nos mesmos dias de teste,
-como referência trivial — ausente do trabalho original.
+![Previsto x observado, reprodução de Zampieri](results/figuras/07_repro_previsto_observado.png)
 
-### Resultados (NSE e RMSE, média ± desvio entre as 3 sementes; persistência não depende da semente)
+O NSE despenca de ~0,86 (A, com vazamento) para muito negativo (B, sem vazamento) nos três
+postos: o desempenho relatado no trabalho original é um artefato da divisão aleatória dos
+dados, não evidência de que a rede aprendeu a dinâmica da bacia. E a persistência bate a LSTM
+em quase toda versão sem vazamento (B e C) — o trabalho original não comparava com nenhuma
+referência trivial.
 
-| Posto | Versão | Modelo | NSE | RMSE (cm) |
-|---|---|---|---|---|
-| IVR | A | LSTM | 0,86 ± 0,08 | 12,4 ± 2,7 |
-| IVR | A | persistência | 0,93 ± 0,03 | 9,1 ± 2,6 |
-| IVR | B | LSTM | -6,39 ± 3,22 | 13,3 ± 3,0 |
-| IVR | B | persistência | 0,65 | 2,9 |
-| IVR | C | LSTM | 0,37 ± 0,28 | 3,9 ± 0,9 |
-| IVR | C | persistência | 0,65 | 2,9 |
-| GAP | A | LSTM | 0,85 ± 0,02 | 14,0 ± 1,5 |
-| GAP | A | persistência | 0,85 ± 0,07 | 13,7 ± 3,8 |
-| GAP | B | LSTM | -4,62 ± 1,13 | 19,0 ± 1,9 |
-| GAP | B | persistência | -0,45 | 9,7 |
-| GAP | C | LSTM | -0,94 ± 0,16 | 11,2 ± 0,5 |
-| GAP | C | persistência | -0,45 | 9,7 |
-| FSB | A | LSTM | 0,88 ± 0,02 | 8,4 ± 1,9 |
-| FSB | A | persistência | 0,93 ± 0,04 | 6,1 ± 2,1 |
-| FSB | B | LSTM | -11,54 ± 1,79 | 15,9 ± 1,1 |
-| FSB | B | persistência | 0,78 | 2,1 |
-| FSB | C | LSTM | -1,33 ± 1,15 | 6,7 ± 1,6 |
-| FSB | C | persistência | 0,78 | 2,1 |
+## Dados
 
-Tabela completa (KGE, PBIAS, R², épocas, período de teste): `results/tabelas/repro_zampieri.csv`.
+| Posto | Código ANA | Rio | Área (km²) | Dado de | até |
+|---|---|---|---|---|---|
+| IVR | 62752000 | Jacaré-Pepira | 1800 | 1999 | 2019 |
+| GAP | 62776800 | Jacaré-Guaçu | 2430 | 1981 | 2019 |
+| FSB | 62800000 | Ribeirão dos Porcos | 2710 | 1974 | 2019 |
 
-### Figura
+Vazão: HidroWeb/ANA, série consistida até 2019. Chuva, Tmax e Tmin: grade de Xavier (BR-DWGD).
+Trechos de medição com problema (salto de cota sem chuva que explique, cota abaixo da faixa
+da curva de descarga) viram falta — critério e datas em
+[`configs/periodos_invalidos.yaml`](configs/periodos_invalidos.yaml).
 
-`results/figuras/07_repro_previsto_observado.png` — à esquerda, previsto × observado da versão A
-(LSTM e persistência, ambos ajustados à diagonal); à direita, série temporal da versão C
-(observado, LSTM e persistência). A figura confirma visualmente que a persistência acompanha ou
-supera a LSTM em GAP e FSB (a LSTM suaviza os picos que a persistência captura); em IVR a diferença
-é mais sutil visualmente, mas presente na tabela.
+## Método
 
-### Conclusão
+- **Divisão**: validação walk-forward 2005-2014 (10 dobras, janela expansiva); teste
+  2015-2019, trancado até a avaliação final e rodado uma única vez.
+- **Modelo**: uma camada LSTM(64) + Dense(30) — prevê os 30 dias de uma vez, não um modelo por
+  horizonte. Janela de entrada de 60 dias.
+- **Alvo**: variação do log da vazão em relação ao dia da previsão —
+  log1p(Q[t+h]) − log1p(Q[t]) — não o nível absoluto. Escolhido comparando as duas opções
+  antes da validação completa.
+- **Entradas**: vazão, chuva, Tmax, Tmin, seno/cosseno do dia do ano — tudo só até o dia da
+  previsão, nunca dado futuro.
+- **Referências**: persistência (valor de ontem) e climatologia (média histórica do dia do
+  ano), nos mesmos dias que a LSTM.
+- **Métricas**: NSE, KGE, PBIAS, RMSE, R², sempre em m³/s. 3 sementes por configuração.
+- Decisões de método (alvo, janela, arquitetura, teste único) registradas **antes** de ver o
+  resultado — histórico completo e datado em [`docs/decisoes.md`](docs/decisoes.md).
 
-- **Vazamento confirmado:** o NSE da versão A (0,85–0,93) despenca para valores fortemente
-  negativos na versão B (-4,6 a -11,5) ao remover apenas o vazamento metodológico (divisão
-  aleatória, scaler ajustado no conjunto todo, janelas atravessando lacunas). O desempenho "bom"
-  do artigo original é um artefato da metodologia, não evidência de que o modelo aprendeu a
-  dinâmica da bacia.
-- **Ausência de referência trivial:** o trabalho original não compara com nenhuma baseline. Aqui,
-  a persistência supera a LSTM em praticamente todas as configurações sem vazamento (B e C, nos
-  três postos) — inclusive quando a LSTM recebe a própria cota passada como entrada (C). Isso
-  indica que, nesses dados, nem o acréscimo da cota foi suficiente para o LSTM superar um modelo
-  trivial de um parâmetro.
-- Escopo da Parte 1 encerrado conforme `docs/decisoes.md` (sem SMAP, sem busca de
-  hiperparâmetros, sem outras arquiteturas nesta etapa).
+## Posto de controle: IVR
+
+IVR tem medição comprovadamente mais inconsistente que GAP e FSB (balanço chuva-vazão
+independente da régua). Hipótese pré-registrada, em duas partes: (1) desempenho do LSTM pior
+que GAP e FSB; (2) pior ainda nos dias com medição sinalizada como suspeita. No teste final: a
+parte 1 depende da métrica (NSE e skill score discordam); a parte 2 foi **refutada** pelas
+duas métricas — dias suspeitos não saíram piores. Números e critério completos em
+`docs/decisoes.md`.
+
+## Limitações
+
+- Dado vai só até 2019 — não captura o regime hidrológico mais recente da bacia.
+- Uma arquitetura só foi testada (LSTM(64) + Dense), sem busca de hiperparâmetros.
+- Sem previsão meteorológica futura nas entradas — só o observado até o dia da previsão; um
+  uso operacional exigiria isso.
+- Trechos de medição removidos (`configs/periodos_invalidos.yaml`) encurtam a série e deixam
+  alguns anos de validação sem amostra suficiente.
+- NSE depende da variância de cada subconjunto — comparar grupos com variância diferente
+  (ex.: suspeito x não-suspeito) usa skill score, não NSE puro.
+
+## Como reproduzir
+
+Dois ambientes, propositalmente separados:
+
+| venv | Python | Para quê |
+|---|---|---|
+| `.venv` | 3.14 | dados, QA, baselines, agregação, testes |
+| `.venv-ml` | 3.12 + TensorFlow | treino da LSTM |
+
+**Sempre** `source .venv-ml/bin/activate` antes de qualquer comando com TensorFlow — nunca
+chamar `.venv-ml/bin/python` direto (sem isso o TensorFlow não acha a GPU no WSL).
+
+Dados brutos não são versionados (`.gitignore`) — baixe antes de rodar:
+- Vazão: HidroWeb (ANA), estações 62752000 (IVR), 62776800 (GAP), 62800000 (FSB), arquivo
+  `*_Vazoes.csv`, em `data/raw/hidroweb/<posto>/`.
+- Chuva, Tmax, Tmin: grade de Xavier (BR-DWGD), baixada à parte e recortada com
+  `python src/ingest/xavier_recorte.py <pasta_dos_nc>`.
+
+Depois:
+
+```bash
+scripts/reproduzir.sh --sem-treino   # minutos — usa as previsões já salvas em results/
+scripts/reproduzir.sh --completo     # inclui os treinos: ~4h no total, com GPU
+```
+
+## Estrutura
+
+```
+src/ingest/     parsers dos dados brutos (HidroWeb, Xavier, Zampieri)
+src/prep/       limpeza e montagem da tabela diária por posto
+src/qa/         checagem de consistência (chuva x vazão)
+src/eda/        figuras e tabela exploratória
+src/features/   janelas, divisão treino/validação/teste, escala
+src/models/     baselines e arquitetura da LSTM
+src/repro/      reprodução de Zampieri (2025)
+src/relatorio/  tabelas deste README, geradas a partir dos resultados
+configs/        postos e períodos de medição inválida
+docs/           registro de decisões, cronológico e datado
+results/        tabelas, figuras e previsões (versionados)
+```
