@@ -85,3 +85,8 @@ IVR é mantido como POSTO DE CONTROLE, com medição comprovadamente inconsisten
   GAP 0,95 / 0,44 / 0,18 ; FSB 0,87 / 0,25 / 0,13 (1 / 7 / 30 dias).
   Climatologia GAP: R² 0,06 -> 0,27 e PBIAS +35% -> -4,6% após a limpeza.
   IVR (controle): climatologia sem sinal (R² 0,03), coerente com a hipótese pré-registrada.
+
+## 2026-10-01 — Escopo final e checagens
+- Escopo final: sem comparação com o SMAP, sem ajuste extenso de hiperparâmetros, sem outras arquiteturas.
+  Métricas: NSE, RMSE, PBIAS, R² e KGE. Entrega final: código reproduzível + texto de conclusões.
+- IVR mar/2009 (mínimo 4,5 m³/s em período chuvoso) conferido: recessão contínua e recuperação, mantido.
